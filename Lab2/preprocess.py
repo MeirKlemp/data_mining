@@ -1,4 +1,5 @@
-NOON_12_O_CLOCK = 60 * 12
+MIN_PER_24_HOURS = 60 * 24
+MIN_PER_12_HOURS = 60 * 12
 LOW = 0
 HIGH = 1
 HIGH_THRESHOLD = 37
@@ -16,15 +17,33 @@ def convert2arff(num_of_files):
             fout.write("@attribute time numeric\n")
             fout.write("@attribute temperatue {0, 1}\n\n")
             fout.write("@data\n")
-            for time in range(NOON_12_O_CLOCK):
+            for time in range(MIN_PER_12_HOURS):
                 strings = fin.readline().split()
-                str_to_float = lambda s: float(s)
-                degrees = map(str_to_float, strings)
+                degrees = map(lambda s: float(s), strings)
                 degrees = map(process_degree, degrees)
                 lohs = map(low_or_high, degrees)
                 strings = map(loh_to_str, lohs)
                 for patient, loh in enumerate(strings):
                     fout.write(f"{patient + 1}, {time}, {loh}\n")
+
+
+def stdv(ward):
+    with open(f"{ward}.txt", "r") as fin:
+        count = 0
+        sum_degrees = 0
+        sum_squared_degrees = 0
+        for time in range(MIN_PER_24_HOURS):
+            strings = fin.readline().split()
+            degrees = map(lambda s: float(s), strings)
+            degrees = map(process_degree, degrees)
+            valid_degrees = filter(lambda d: d != INVALID_DEGREE, degrees)
+            for degree in valid_degrees:
+                sum_degrees += degree
+                sum_squared_degrees += degree ** 2
+                count += 1
+        average = sum_degrees / count
+        variance = sum_squared_degrees / count - average ** 2
+        return variance ** 0.5
 
 
 def process_degree(degree):
@@ -52,4 +71,8 @@ def loh_to_str(degree):
     return str(degree)
 
 
-convert2arff(3)
+if __name__ == "__main__":
+    WARDS = 3
+    convert2arff(WARDS)
+    for i in range(WARDS):
+        print("stdv of ward", i + 1, "is", stdv(i + 1))
