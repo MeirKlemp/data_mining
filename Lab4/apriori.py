@@ -3,7 +3,7 @@ import time
 
 FILENAME = "itemsets.txt"
 N = 10  # no. of attributes
-MINSUP = 0.1
+MINSUP = 0.4
 
 
 # Creates a file named filename containing m sorted itemsets of items 0..N-1
@@ -61,6 +61,15 @@ def frequent_itemsets(filename, itemsets):
     return freqitemsets
 
 
+# Checks that all k-1 subsets of k-itemset are frequent itemsets.
+def all_kminus1_subsets_are_frequent(filename, kitemset):
+    k = len(kitemset)
+    kminus1_subsets = [None] * k
+    for i in range(k):
+        kminus1_subsets[i] = kitemset[:i] + kitemset[i + 1 :]
+    return len(frequent_itemsets(filename, kminus1_subsets)) == k
+
+
 def create_kplus1_itemsets(kitemsets, filename):
     kplus1_itemsets = []
     for i in range(len(kitemsets) - 1):
@@ -72,7 +81,10 @@ def create_kplus1_itemsets(kitemsets, filename):
             kplus1_itemsets += [kitemsets[i] + [kitemsets[j][-1]]]
             j += 1
     # checks which of the k+1 itemsets are frequent
-    return frequent_itemsets(filename, kplus1_itemsets)
+    freqitemsets = frequent_itemsets(filename, kplus1_itemsets)
+    return list(
+        filter(lambda i: all_kminus1_subsets_are_frequent(filename, i), freqitemsets)
+    )
 
 
 def create_1itemsets(filename):
@@ -91,7 +103,7 @@ def minsup_itemsets(filename):
     return minsupsets
 
 
-def create_file_with_k_sized_itemset(k, m, filename, max_seconds=15.0):
+def create_file_with_k_sized_itemset(k, m, filename, max_seconds=60):
     succeed = False
     start = time.time()
     tries = 0
@@ -106,7 +118,7 @@ def create_file_with_k_sized_itemset(k, m, filename, max_seconds=15.0):
     return succeed, tries
 
 
-succeed, tries = create_file_with_k_sized_itemset(3, 10000, FILENAME)
+succeed, tries = create_file_with_k_sized_itemset(5, 10, FILENAME)
 print(tries)
 if succeed:
     print(minsup_itemsets(FILENAME))
