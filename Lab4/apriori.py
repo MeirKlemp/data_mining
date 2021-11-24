@@ -63,13 +63,15 @@ def frequent_itemsets(filename, itemsets):
     return freqitemsets
 
 
-# Checks that all k-1 subsets of k-itemset are frequent itemsets.
-def all_kminus1_subsets_are_frequent(filename, kitemset):
-    k = len(kitemset)
-    kminus1_subsets = [None] * k
-    for i in range(k):
-        kminus1_subsets[i] = kitemset[:i] + kitemset[i + 1 :]
-    return len(frequent_itemsets(filename, kminus1_subsets)) == k
+# Checks that all k subsets of k+1-itemset are frequent itemsets.
+# Note: kplus1_itemset and frequent_kitemsets mustn't include the support value
+def all_ksubsets_are_frequent(kplus1_itemset, frequent_kitemsets):
+    kplus1 = len(kplus1_itemset)
+    for i in range(kplus1):
+        ksubset = kplus1_itemset[:i] + kplus1_itemset[i + 1 :]
+        if ksubset not in frequent_kitemsets:
+            return False
+    return True
 
 
 def create_kplus1_itemsets(kitemsets, filename):
@@ -85,10 +87,10 @@ def create_kplus1_itemsets(kitemsets, filename):
             j += 1
     # checks which of the k+1 itemsets are frequent
     freqitemsets = frequent_itemsets(filename, kplus1_itemsets)
+    # return freqitemsets
+    kitemsets = list(map(lambda i: i[:-1], kitemsets))
     return list(
-        filter(
-            lambda i: all_kminus1_subsets_are_frequent(filename, i[:-1]), freqitemsets
-        )
+        filter(lambda i: all_ksubsets_are_frequent(i[:-1], kitemsets), freqitemsets)
     )
 
 
@@ -118,7 +120,7 @@ def create_file_with_k_sized_itemset(k, m, filename, max_seconds=60):
             break
         createfile(m, filename)
         itemsets = minsup_itemsets(filename)
-        succeed = any(filter(lambda i: len(i) >= k, itemsets))
+        succeed = any(filter(lambda i: len(i) - 1 >= k, itemsets))
         tries += 1
     return succeed, tries
 
