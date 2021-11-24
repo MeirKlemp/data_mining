@@ -37,7 +37,7 @@ def is_in(smallitemset, bigitemset):
 
 
 # Returns a list of itemsets (from the list itemsets) that are frequent
-# in the itemsets in filename
+# in the itemsets in filename with the support of each itemset at the end of each itemset
 def frequent_itemsets(filename, itemsets):
     f = open(filename, "r")
     filelength = 0  # filelength is the no. of itemsets in the file. we
@@ -57,6 +57,8 @@ def frequent_itemsets(filename, itemsets):
     freqitemsets = []
     for i in range(len(itemsets)):
         if count[i] >= MINSUP * filelength:
+            # add the support to the end of the itemset
+            itemsets[i].append(count[i] / filelength)
             freqitemsets += [itemsets[i]]
     return freqitemsets
 
@@ -72,18 +74,21 @@ def all_kminus1_subsets_are_frequent(filename, kitemset):
 
 def create_kplus1_itemsets(kitemsets, filename):
     kplus1_itemsets = []
-    for i in range(len(kitemsets) - 1):
+    for i in range(len(kitemsets) - 2):
         j = i + 1  # j is an index
-        # compares all pairs, without the last item, (note that the lists are sorted)
+        # compares all pairs, without the last item of the itemset and the support (2 items)
+        # note that the lists are sorted.
         # and if they are equal than adds the last item of kitemsets[j] to kitemsets[i]
         # in order to create k+1 itemset
-        while j < len(kitemsets) and kitemsets[i][:-1] == kitemsets[j][:-1]:
-            kplus1_itemsets += [kitemsets[i] + [kitemsets[j][-1]]]
+        while j < len(kitemsets) and kitemsets[i][:-2] == kitemsets[j][:-2]:
+            kplus1_itemsets += [kitemsets[i][:-1] + [kitemsets[j][-2]]]
             j += 1
     # checks which of the k+1 itemsets are frequent
     freqitemsets = frequent_itemsets(filename, kplus1_itemsets)
     return list(
-        filter(lambda i: all_kminus1_subsets_are_frequent(filename, i), freqitemsets)
+        filter(
+            lambda i: all_kminus1_subsets_are_frequent(filename, i[:-1]), freqitemsets
+        )
     )
 
 
@@ -109,7 +114,7 @@ def create_file_with_k_sized_itemset(k, m, filename, max_seconds=60):
     tries = 0
     while not succeed:
         seconds_passed = time.time() - start
-        if seconds_passed > max_seconds:
+        if max_seconds != 0 and seconds_passed > max_seconds:
             break
         createfile(m, filename)
         itemsets = minsup_itemsets(filename)
@@ -118,7 +123,7 @@ def create_file_with_k_sized_itemset(k, m, filename, max_seconds=60):
     return succeed, tries
 
 
-succeed, tries = create_file_with_k_sized_itemset(5, 10, FILENAME)
+succeed, tries = create_file_with_k_sized_itemset(4, 10, FILENAME)
 print(tries)
 if succeed:
     print(minsup_itemsets(FILENAME))
