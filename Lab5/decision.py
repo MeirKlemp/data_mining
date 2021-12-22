@@ -1,4 +1,8 @@
 import math
+import time
+
+
+IMAGE_SIZE = 28 * 28
 
 
 def split(examples, used, trait):
@@ -132,15 +136,57 @@ def classifier(dtree, traits):  # same as the former without recursion
     return dtree[1]
 
 
-e = [
-    [1, 0, 0, 0, 0],
-    [0, 1, 1, 0, 1],
-    [1, 1, 1, 0, 0],
-    [1, 1, 0, 1, 0],
-    [0, 0, 1, 1, 1],
-    [1, 0, 1, 1, 0],
-    [1, 0, 0, 1, 1],
-]
+def gray2Bin(gray):
+    if gray < 130:
+        return 0
+    else:
+        return 1
 
-t = build(e)
-print(classifier(t, [0, 1, 1, 1]))
+
+def minst2Bin(images, labels):
+    dataset = []
+    digitset = []
+    with open(images, "rb") as fimages, open(labels, "rb") as flabels:
+        flabels.seek(8)
+        fimages.seek(16)
+        x = fimages.read(1)
+        while x != b"":
+            row = [0] * (IMAGE_SIZE + 1)  # image data + digit(stays 0 for now)
+            row[0] = gray2Bin(ord(x))
+            for i in range(1, IMAGE_SIZE):
+                row[i] = gray2Bin(ord(fimages.read(1)))
+            dataset.append(row)
+            digitset.append(ord(flabels.read(1)))
+            x = fimages.read(1)
+    return dataset, digitset
+
+
+def buildMinst(images, labels, maxDepth=None):
+    DIGITS = 10
+    dataset, digitset = minst2Bin(images, labels)
+    trees = [None] * DIGITS
+    for i in range(DIGITS):
+        for row, digit in enumerate(digitset):
+            dataset[row][IMAGE_SIZE] = 1 if i == digit else 0
+        print("start", i)
+        trees[i] = build(dataset, maxDepth)
+        print("done", i)
+    return trees
+
+
+start = time.time()
+trees = buildMinst("./train-images-idx3-ubyte", "./train-labels-idx1-ubyte", maxDepth=5)
+print(time.time() - start, "seconds")
+print(trees)
+# e = [
+#     [1, 0, 0, 0, 0],
+#     [0, 1, 1, 0, 1],
+#     [1, 1, 1, 0, 0],
+#     [1, 1, 0, 1, 0],
+#     [0, 0, 1, 1, 1],
+#     [1, 0, 1, 1, 0],
+#     [1, 0, 0, 1, 1],
+# ]
+
+# t = build(e)
+# print(classifier(t, [0, 1, 1, 1]))
