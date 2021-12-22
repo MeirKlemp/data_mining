@@ -1,5 +1,7 @@
 import math
-import time
+from time import time as now
+import json
+import os
 
 
 IMAGE_SIZE = 28 * 28
@@ -136,48 +138,162 @@ def classifier(dtree, traits):  # same as the former without recursion
     return dtree[1]
 
 
-def gray2Bin(gray):
-    if gray < 130:
+def gray2Bin(gray, threshold):
+    if gray < threshold:
         return 0
     else:
         return 1
 
 
-def minst2Bin(images, labels):
+def minst2bin(images, labels, threshold=130):
     dataset = []
     digitset = []
     with open(images, "rb") as fimages, open(labels, "rb") as flabels:
         flabels.seek(8)
         fimages.seek(16)
         x = fimages.read(1)
+        c = 0
         while x != b"":
             row = [0] * (IMAGE_SIZE + 1)  # image data + digit(stays 0 for now)
-            row[0] = gray2Bin(ord(x))
+            row[0] = gray2Bin(ord(x), threshold)
             for i in range(1, IMAGE_SIZE):
-                row[i] = gray2Bin(ord(fimages.read(1)))
+                row[i] = gray2Bin(ord(fimages.read(1)), threshold)
             dataset.append(row)
             digitset.append(ord(flabels.read(1)))
             x = fimages.read(1)
     return dataset, digitset
 
 
-def buildMinst(images, labels, maxDepth=None):
+def buildclassifier(dataset, digitset, images, labels, maxDepth=None, threshold=130):
     DIGITS = 10
-    dataset, digitset = minst2Bin(images, labels)
     trees = [None] * DIGITS
     for i in range(DIGITS):
-        for row, digit in enumerate(digitset):
-            dataset[row][IMAGE_SIZE] = 1 if i == digit else 0
-        print("start", i)
-        trees[i] = build(dataset, maxDepth)
-        print("done", i)
+        start = now()
+        cached = loadCache(images, labels, maxDepth, threshold, i)
+        if cached is not None:
+            trees[i] = cached
+            print("found", i, "in", now() - start, "seconds")
+        else:
+            for row, digit in enumerate(digitset):
+                dataset[row][IMAGE_SIZE] = 1 if i == digit else 0
+            print("start", i)
+            trees[i] = build(dataset, maxDepth)
+            saveCache(trees[i], images, labels, maxDepth, threshold, i)
+            print("generated", i, "in", now() - start, "seconds")
     return trees
 
 
-start = time.time()
-trees = buildMinst("./train-images-idx3-ubyte", "./train-labels-idx1-ubyte", maxDepth=5)
-print(time.time() - start, "seconds")
-print(trees)
+def classify(trees, image):
+    digit = -2
+    for i, tree in enumerate(trees):
+        if classifier(tree, image):
+            if digit != -2:
+                return -1
+            digit = i
+    return digit
+
+
+def tester(trees, dataset, digitset):
+    success = 0
+    for i, image in enumerate(dataset):
+        digit = classify(trees, image)
+        # print(digitset[i], digit)
+        if digit == digitset[i]:
+            success += 1
+    return success / len(dataset)
+
+
+def threshold(trainImages, trainLabels, testImages, testLabels, maxDepth=None):
+    maxThresh = 128
+    trainDataset, trainDigitset = minst2bin(trainImages, trainLabels, maxThresh)
+    testDataset, testDigitset = minst2bin(testImages, testLabels, maxThresh)
+    trees = buildclassifier(
+        trainDataset, trainDigitset, trainImages, trainLabels, maxDepth, maxThresh
+    )
+    maxScore = tester(trees, testDataset, testDigitset)
+    print(maxThresh, maxScore)
+
+    for i in range(1, 128):
+        tu = 128 + i
+        trainDataset, trainDigitset = minst2bin(trainImages, trainLabels, tu)
+        testDataset, testDigitset = minst2bin(testImages, testLabels, tu)
+        trees = buildclassifier(
+            trainDataset, trainDigitset, trainImages, trainLabels, maxDepth, tu
+        )
+        score = tester(trees, testDataset, testDigitset)
+        if score > maxScore:
+            maxThresh = tu
+            maxScore = score
+        print(tu, score)
+
+        td = 128 - i
+        trainDataset, trainDigitset = minst2bin(trainImages, trainLabels, td)
+        testDataset, testDigitset = minst2bin(testImages, testLabels, td)
+        trees = buildclassifier(
+            trainDataset, trainDigitset, trainImages, trainLabels, maxDepth, td
+        )
+        score = tester(trees, testDataset, testDigitset)
+        if score > maxScore:
+            maxThresh = td
+            maxScore = score
+        print(td, score)
+    return maxThresh, maxScore
+
+
+def cachePath(images, labels, maxDepth, threshold, digit):
+    return f".cache/{images}.{labels}.{maxDepth}.{threshold}.{digit}"
+
+
+def loadCache(images, labels, maxDepth, threshold, digit):
+    filename = cachePath(images, labels, maxDepth, threshold, digit)
+    if os.path.isfile(filename):
+        with open(filename, "r") as f:
+            return json.loads(f.read())
+
+
+def saveCache(tree, images, labels, maxDepth, threshold, digit):
+    with open(cachePath(images, labels, maxDepth, threshold, digit), "w") as f:
+        f.write(json.dumps(tree))
+
+
+# print(
+#     threshold(
+#         "dig-train-images",
+#         "dig-train-labels",
+#         "dig-test-images",
+#         "dig-test-labels",
+#         maxDepth=30,
+#     )
+# )
+
+thresh = 141
+trainDataset, trainDigitset = minst2bin(
+    "train-images-idx3-ubyte", "train-labels-idx1-ubyte", thresh
+)
+testDataset, testDigitset = minst2bin(
+    "t10k-images-idx3-ubyte", "t10k-labels-idx1-ubyte", thresh
+)
+trees = buildclassifier(
+    trainDataset,
+    trainDigitset,
+    "train-images-idx3-ubyte",
+    "train-labels-idx1-ubyte",
+    10,
+    thresh,
+)
+maxScore = tester(trees, testDataset, testDigitset)
+print(thresh, maxScore)
+
+# print(
+#     threshold(
+#         "train-images-idx3-ubyte",
+#         "train-labels-idx1-ubyte",
+#         "t10k-images-idx3-ubyte",
+#         "t10k-labels-idx1-ubyte",
+#         maxDepth=10,
+#     )
+# )
+
 # e = [
 #     [1, 0, 0, 0, 0],
 #     [0, 1, 1, 0, 1],
