@@ -164,7 +164,8 @@ def buildclassifier(dataset, digitset, images, labels, maxDepth=None, threshold=
     trees = [None] * DIGITS
     for i in range(DIGITS):
         start = now()
-        cached = loadCache(images, labels, maxDepth, threshold, i)
+        cache = cachePath(images, labels, maxDepth, threshold, i)
+        cached = loadCache(cache)
         if cached is not None:
             trees[i] = cached
             print("found", i, "in", now() - start, "seconds")
@@ -173,7 +174,7 @@ def buildclassifier(dataset, digitset, images, labels, maxDepth=None, threshold=
                 dataset[row][IMAGE_SIZE] = 1 if i == digit else 0
             print("start", i)
             trees[i] = build(dataset, maxDepth)
-            saveCache(trees[i], images, labels, maxDepth, threshold, i)
+            saveCache(cache)
             print("generated", i, "in", now() - start, "seconds")
     return trees
 
@@ -230,15 +231,14 @@ def cachePath(images, labels, maxDepth, threshold, digit):
     return f".cache/{images}.{labels}.{maxDepth}.{threshold}.{digit}"
 
 
-def loadCache(images, labels, maxDepth, threshold, digit):
-    filename = cachePath(images, labels, maxDepth, threshold, digit)
+def loadCache(filename):
     if os.path.isfile(filename):
         with open(filename, "r") as f:
             return json.loads(f.read())
 
 
-def saveCache(tree, images, labels, maxDepth, threshold, digit):
-    with open(cachePath(images, labels, maxDepth, threshold, digit), "w") as f:
+def saveCache(filename):
+    with open(filename, "w") as f:
         f.write(json.dumps(tree))
 
 
@@ -251,26 +251,3 @@ print(
         maxDepth=30,
     )
 )
-
-# print(
-#     threshold(
-#         "dig-train-images",
-#         "dig-train-labels",
-#         "dig-test-images",
-#         "dig-test-labels",
-#         maxDepth=30,
-#     )
-# )
-
-# e = [
-#     [1, 0, 0, 0, 0],
-#     [0, 1, 1, 0, 1],
-#     [1, 1, 1, 0, 0],
-#     [1, 1, 0, 1, 0],
-#     [0, 0, 1, 1, 1],
-#     [1, 0, 1, 1, 0],
-#     [1, 0, 0, 1, 1],
-# ]
-
-# t = build(e)
-# print(classifier(t, [0, 1, 1, 1]))
