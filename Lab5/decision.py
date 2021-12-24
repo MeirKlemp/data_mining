@@ -132,36 +132,67 @@ def recClassifier(dtree, traits):
     )  # o points to the left child, 2 points to the right child
 
 
-def classifier(dtree, traits):  # same as the former without recursion
+def classifier(dtree, traits):
+    """same as the recClassifier, but without recursion"""
     while dtree[0] != []:
         dtree = dtree[traits[dtree[1]] * 2]
     return dtree[1]
 
 
 def gray2bin(gray, threshold):
+    """converts gray pixel to a bin pixel according to the threshold"""
     if gray < threshold:
         return 0
     else:
         return 1
 
 
-def minst2bin(images, labels, threshold=130, old=False):
+def minst2bin(images, labels, threshold=130):
+    """
+    loads the dataset and labels and converts the images to binary
+    :images: path to the images dataset
+    :labels: path to the labels dataset
+    :threshold: the threshold between black and white when converting the images to bin
+    :return: dataset with binary images and the digitset (labels) with values between 0 to 9
+    :rtype: Tuple[List[List[int]], List[int]]
+    """
+
     dataset = []
     digitset = []
     with open(images, "rb") as fimages, open(labels, "rb") as flabels:
+        # move to the data
         flabels.seek(8)
         fimages.seek(16)
+
+        # each image from the dataset being converted to binary images,
+        # and the labels are inserted to digitset.
         while (image := fimages.read(IMAGE_SIZE)) != b"":
             row = [gray2bin(px, threshold) for px in image]
-            row += [0]  # Make space for the class (will stay 0 for now)
+            row += [0]  # Make space for the label (will stay 0 for now)
             dataset.append(row)
             digitset.append(ord(flabels.read(1)))
     return dataset, digitset
 
 
 def buildclassifier(dataset, digitset, images, labels, maxDepth=None, threshold=130):
+    """
+    builds a digit classifier from the given dataset
+    the classifier contains 10 decision trees
+    each tree will learn to classify a single digit
+
+    :dataset: the dataset of binary images
+    :digitset: the labels of the images
+    :images: the file name of the images' dataset (used for caching)
+    :labels: the file name of the labels' dataset (used for caching)
+    :maxDepth: the max depth of all the decision trees (used also for caching)
+    :threshold: the threshold that the dataset was built with (used for caching)
+    :return: the built model
+    :rtype: List[List[List[...], int, List[...]]]
+    """
+
     DIGITS = 10
     trees = [None] * DIGITS
+    # load or generate a tree for each digit
     for i in range(DIGITS):
         start = now()
         cache = cachePath(images, labels, maxDepth, threshold, i)
@@ -170,19 +201,28 @@ def buildclassifier(dataset, digitset, images, labels, maxDepth=None, threshold=
             trees[i] = cached
             print("found", i, "in", now() - start, "seconds")
         else:
+            # add the binary labels to the end of the dataset
             for row, digit in enumerate(digitset):
                 dataset[row][IMAGE_SIZE] = 1 if i == digit else 0
             print("start", i)
             trees[i] = build(dataset, maxDepth)
-            saveCache(cache)
+            saveCache(trees[i], cache)
             print("generated", i, "in", now() - start, "seconds")
     return trees
 
 
 def classify(trees, image):
+    """
+    using the given model to classify the digit of the image
+    :return: -2: couldn't classify,
+             -1: classified as multiple digits,
+             0-9: the classified digit
+    """
+
     digit = -2
     for i, tree in enumerate(trees):
         if classifier(tree, image):
+            # checks if already classified
             if digit != -2:
                 return -1
             digit = i
@@ -190,6 +230,12 @@ def classify(trees, image):
 
 
 def tester(trees, dataset, digitset):
+    """
+    tests the given model with the given dataset and digitset
+    :return: the success rate of the model. value in range [0,1]
+    :rtype: float
+    """
+
     success = 0
     for i, image in enumerate(dataset):
         digit = classify(trees, image)
@@ -199,45 +245,61 @@ def tester(trees, dataset, digitset):
 
 
 def threshold(trainImages, trainLabels, testImages, testLabels, maxDepth=None):
-    def calcScore(threshold):
+    """
+    searches the threshold that results with the max success rate of the model
+    :trainImages: the file name of the images dataset for the training
+    :trainLabels: the file name of the labels dataset for the training
+    :testImages: the file name of the images dataset for the testing
+    :testLabels: the file name of the labels dataset for the testing
+    :maxDepth: the max depth of the builted models
+    :return: the threshold that gives the max score with the score
+    :rtype: Tuple[int, float]
+    """
+
+    def calcScore(threshold, maxThresh, maxScore):
+        """
+        builds and tests the model with the given threshold and compares with the max score
+        :return: the threshold that gave the max score with the score
+        :rtype: Tuple[int, float]
+        """
+
         trainDataset, trainDigitset = minst2bin(trainImages, trainLabels, threshold)
         testDataset, testDigitset = minst2bin(testImages, testLabels, threshold)
         trees = buildclassifier(
             trainDataset, trainDigitset, trainImages, trainLabels, maxDepth, threshold
         )
-        return tester(trees, testDataset, testDigitset)
+        score = tester(trees, testDataset, testDigitset)
+        print("finished a model with", threshold, "threshold and", score, "score")
 
-    maxThresh = 128
-    maxScore = calcScore(maxThresh)
+        if score > maxScore:
+            maxScore = score
+            maxThresh = threshold
+        return maxThresh, maxScore
+
+    # calculates the score from 128 to 0 and to 256 to find the threshold
+    # that gave the maximum score
+    maxThresh, maxScore = calcScore(128, 0, 0)
     print(maxThresh, maxScore)
     for i in range(1, 128):
-        threshold = 128 + i
-        score = calcScore(threshold)
-        if score > maxScore:
-            maxThresh = threshold
-            maxScore = score
-        print(threshold, score)
-
-        threshold = 128 - i
-        score = calcScore(threshold)
-        if score > maxScore:
-            maxThresh = threshold
-            maxScore = score
-        print(threshold, score)
+        maxThresh, maxScore = calcScore(128 + i, maxThresh, maxScore)
+        maxThresh, maxScore = calcScore(128 - i, maxThresh, maxScore)
     return maxThresh, maxScore
 
 
 def cachePath(images, labels, maxDepth, threshold, digit):
+    """creates a path to cache a classifier model that was built with the given paramters"""
     return f".cache/{images}.{labels}.{maxDepth}.{threshold}.{digit}"
 
 
 def loadCache(filename):
+    """loaded a classifier model from cache if exists"""
     if os.path.isfile(filename):
         with open(filename, "r") as f:
             return json.loads(f.read())
 
 
-def saveCache(filename):
+def saveCache(tree, filename):
+    """saves the classifier model as cache"""
     with open(filename, "w") as f:
         f.write(json.dumps(tree))
 
