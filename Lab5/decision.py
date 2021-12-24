@@ -269,17 +269,18 @@ def threshold(trainImages, trainLabels, testImages, testLabels, maxDepth=None):
             trainDataset, trainDigitset, trainImages, trainLabels, maxDepth, threshold
         )
         score = tester(trees, testDataset, testDigitset)
-        print("finished a model with", threshold, "threshold and", score, "score")
-
         if score > maxScore:
             maxScore = score
             maxThresh = threshold
+
+        print("current: threshold:", threshold, f"score: {score * 100:.4}%")
+        print("max:     threshold:", maxThresh, f"score: {maxScore * 100:.4}%")
+
         return maxThresh, maxScore
 
     # calculates the score from 128 to 0 and to 256 to find the threshold
     # that gave the maximum score
     maxThresh, maxScore = calcScore(128, 0, 0)
-    print(maxThresh, maxScore)
     for i in range(1, 128):
         maxThresh, maxScore = calcScore(128 + i, maxThresh, maxScore)
         maxThresh, maxScore = calcScore(128 - i, maxThresh, maxScore)
